@@ -23,11 +23,6 @@ extern FILE *yyin;
 extern int yyparse(unique_ptr<BaseAST> &ast);
 extern void parse_string(const char* str);
 
-void parse_test()
-{
-  cout<<"  .text\n    .globl main\n  main:\n    li a0, 0\n    ret\n"<<endl;
-}
-
 int main(int argc, const char *argv[]) {
   // 解析命令行参数. 测试脚本/评测平台要求你的编译器能接收如下参数:
   // compiler 模式 输入文件 -o 输出文件
@@ -52,8 +47,7 @@ int main(int argc, const char *argv[]) {
   {
     // Dump Koopa IR
     freopen(output, "w", stdout);
-    parse_test();
-    //ast->Dump();
+    ast->Dump();
     dup2(old, 1);
   }
   else if (strcmp(mode, "-riscv") == 0)
