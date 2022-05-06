@@ -62,6 +62,8 @@ using namespace std;
 %type <ast_val> CompUnits FunorVar FuncDef FuncRParams FuncFParams FuncFParam FuncType Block ArrayDef ArrayExp BlockItem MS UMS LVal Decl VarDecl VarDef InitVal ConstDecl ConstDef ConstInitVal ConstArrayInitVal ConstExp BType Stmt Exp ArrayInitVal LOrExp LAndExp EqExp RelExp UnaryExp PrimaryExp AddExp MulExp Number 
 %type <str_val> UnaryOp
 
+%%
+
 // 开始符, CompUnit ::= FuncDef, 大括号后声明了解析完成后 parser 要做的事情
 // 之前我们定义了 FuncDef 会返回一个 str_val, 也就是字符串指针
 // 而 parser 一旦解析完 CompUnit, 就说明所有的 token 都被解析了, 即解析结束了
@@ -83,11 +85,53 @@ CompUnit
 }
 ;
 
-CompUnits
-: FuncDef {
-
+CompUnits 
+: FunorVar {
+  auto ast = new CompUnitsAST();
+  ast->compunits = NULL;
+  ast->decl = NULL;
+  ast->func_def = unique_ptr<BaseAST>($1);
+  $$ = ast;
+}
+| ConstDecl {
+  auto ast = new CompUnitsAST();
+  ast->compunits = NULL;
+  ast->decl = unique_ptr<BaseAST>($1);
+  ast->func_def = NULL;
+  $$ = ast;
+}
+| CompUnits FunorVar {
+  auto ast = new CompUnitsAST();
+  ast->compunits = unique_ptr<BaseAST>($1);
+  ast->decl = NULL;
+  ast->func_def = unique_ptr<BaseAST>($2);
+  $$ = ast;
+}
+| CompUnits ConstDecl {
+  auto ast = new CompUnitsAST();
+  ast->compunits = unique_ptr<BaseAST>($1);
+  ast->decl = unique_ptr<BaseAST>($2);
+  ast->func_def = NULL;
+  $$ = ast;
 }
 ;
+
+FunorVar
+  : FuncType FuncDef {
+    auto ast = new FunorVarAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->funcdef = unique_ptr<BaseAST>($2);
+    ast->vardef = NULL;
+    $$ = ast;
+  }
+  | FuncType VarDef ';' {
+    auto ast = new FunorVarAST();
+    ast->func_type = unique_ptr<BaseAST>($1);
+    ast->vardef = unique_ptr<BaseAST>($2);
+    ast->funcdef = NULL;
+    $$ = ast;
+  }
+  ;
 
 /* 两种Type*/
 FuncType
@@ -114,31 +158,56 @@ BType
 /* 函数名 */
 FuncDef
 : IDENT '(' ')' Block {
-
+  auto ast = new FuncDefAST();
+  ast->ident = *unique_ptr<string>($1);
+  ast->funcp = NULL;
+  ast->block = unique_ptr<BaseAST>($4);
+  $$ = ast;
 }
 | IDENT '(' FuncFParams ')' Block {
-
+  auto ast = new FuncDefAST();
+  ast->ident = *unique_ptr<string>($1);
+  ast->funcp = unique_ptr<BaseAST>($3);
+  ast->block = unique_ptr<BaseAST>($5);
+  $$ = ast;
 }
 ;
 
 FuncFParams
 : FuncFParam {
-
+  auto ast = new FuncFParamsAST();
+  ast->para = unique_ptr<BaseAST>($1);
+  ast->paras = NULL;
+  $$ = ast;
 }
 | FuncFParam ',' FuncFParams {
-
+  auto ast = new FuncFParamsAST();
+  ast->para = unique_ptr<BaseAST>($1);
+  ast->paras = unique_ptr<BaseAST>($3);
+  $$ = ast;
 }
 ;
 
 FuncFParam
 : BType IDENT {
-
-}
+  auto ast = new FuncFParamAST();
+  ast->isarray = 0;
+  ast->ident = *unique_ptr<string>($2);
+  $$ = ast;
+  }
 | BType IDENT '[' ']' {
-
+  auto ast = new FuncFParamAST();
+  ast->isarray = 1;
+  ast->ident = *unique_ptr<string>($2);
+  ast->arraydef = NULL;
+  $$ = ast;
 }
 | BType IDENT '[' ']' ArrayDef {
-
+  auto ast = new FuncFParamAST();
+  ast->isarray = 1;
+  ast->ident = *unique_ptr<string>($2);
+  ast->arraydef = unique_ptr<BaseAST>($5);
+  $$ = ast;
 }
 ;
 
@@ -393,12 +462,6 @@ ArrayInitVal
 }
 ;
 
-
-
-
-
-
-
 /* Statement */
 // 改写文法的根据是将S分为 完全匹配 (MS) 和 不完全匹配 (UMS) 两类，并且在 UMS 中规定 else 右结合 
 Stmt
@@ -407,7 +470,7 @@ Stmt
   ast->ms = unique_ptr<BaseAST>($1);
   $$ = ast; 
 }
-UMS {
+| UMS {
   auto ast = new StmtAST();
   ast->ums = unique_ptr<BaseAST>($1);
   $$ = ast; 
@@ -437,10 +500,69 @@ MS
   ast->exp = unique_ptr<BaseAST>($2);
   $$ = ast;
 }
+| LVal '=' Exp ';' {
+  auto ast = new MSAST();
+  ast->type = 4;
+  ast->ms = unique_ptr<BaseAST>($1);
+  ast->exp = unique_ptr<BaseAST>($3);
+  $$ = ast; 
+}
+| Block {
+  auto ast = new MSAST();
+  ast->type = 5;
+  ast->ms = unique_ptr<BaseAST>($1);
+  $$ = ast; 
+}
+| IF '(' Exp ')' MS ELSE MS {
+  auto ast = new MSAST();
+  ast->type = 6;
+  ast->exp = unique_ptr<BaseAST>($3);
+  ast->ms = unique_ptr<BaseAST>($5);
+  ast->ms2 = unique_ptr<BaseAST>($7);
+  $$ = ast; 
+}
+| WHILE '(' Exp ')' MS {
+  auto ast = new MSAST();
+  ast->type = 7;
+  ast->exp = unique_ptr<BaseAST>($3);
+  ast->ms = unique_ptr<BaseAST>($5);
+  $$ = ast; 
+}
+| BREAK {
+  auto ast = new MSAST();
+  ast->type = 8;
+  $$ = ast; 
+}
+| CONTINUE {
+  auto ast = new MSAST();
+  ast->type = 9;
+  $$ = ast; 
+}
 ;
 
 UMS
-
+: WHILE '(' Exp ')' UMS {
+  auto ast = new UMSAST();
+  ast->exp = unique_ptr<BaseAST>($3);
+  ast->ums = unique_ptr<BaseAST>($5);
+  ast->ms = NULL;
+  $$ = ast; 
+}
+| IF '(' Exp ')' Stmt {
+  auto ast = new UMSAST();
+  ast->exp = unique_ptr<BaseAST>($3);
+  ast->ms = unique_ptr<BaseAST>($5);
+  ast->ums = NULL;
+  $$ = ast; 
+}
+| IF '(' Exp ')' MS ELSE UMS {
+  auto ast = new UMSAST();
+  ast->exp = unique_ptr<BaseAST>($3);
+  ast->ms = unique_ptr<BaseAST>($5);
+  ast->ums = unique_ptr<BaseAST>($7);
+  $$ = ast; 
+}
+;
 
 /* 表达式 */
 Exp
@@ -605,7 +727,35 @@ UnaryExp
   ast->unaryexp_paras = unique_ptr<BaseAST>($2);
   $$ = ast;
 }
-// 函数调用在这里
+| IDENT '(' ')' {
+  auto ast = new UnaryExpAST();
+  ast->type = 2;
+  ast->op_ident =  *unique_ptr<string>($1);
+  ast->unaryexp_paras = NULL;
+  $$ = ast;
+}
+| IDENT '(' FuncRParams ')' {
+  auto ast = new UnaryExpAST();
+  ast->type = 3;
+  ast->op_ident =  *unique_ptr<string>($1);
+  ast->unaryexp_paras = unique_ptr<BaseAST>($3);
+  $$ = ast;
+}
+;
+
+FuncRParams
+: Exp {
+  auto ast = new FuncRParamsAST();
+  ast->exp =  unique_ptr<BaseAST>($1);
+  ast->paras = NULL;
+  $$ = ast;
+}
+| Exp ',' FuncRParams{
+  auto ast = new FuncRParamsAST();
+  ast->exp =  unique_ptr<BaseAST>($1);
+  ast->paras = unique_ptr<BaseAST>($3);
+  $$ = ast;
+}
 ;
 
 UnaryOp
@@ -635,13 +785,43 @@ PrimaryExp
   ast->exp = NULL;
   $$ = ast;
 }
-// | LVal {
-//   auto ast = new PrimaryExpAST();
-//   ast->exp = NULL;
-//   ast->num = NULL;
-//   ast->lval = unique_ptr<BaseAST>($1);
-//   $$ = ast;
-// }
+| LVal {
+  auto ast = new PrimaryExpAST();
+  ast->exp = NULL;
+  ast->num = NULL;
+  ast->lval = unique_ptr<BaseAST>($1);
+  $$ = ast;
+}
+;
+
+LVal
+: IDENT {
+  auto ast = new LValAST();
+  ast->ident = *unique_ptr<string>($1);
+  ast->arrayexp = NULL;
+  $$ = ast; 
+}
+| IDENT ArrayExp {    // ArrayExp 表示 一次或更多的"[" Exp "]"
+  auto ast = new LValAST();
+  ast->ident = *unique_ptr<string>($1);
+  ast->arrayexp = unique_ptr<BaseAST>($2);
+  $$ = ast; 
+}
+;
+
+ArrayExp
+: '[' Exp ']' {
+  auto ast = new ArrayExpAST();
+  ast->exp = unique_ptr<BaseAST>($2);
+  ast->arrayexp = NULL;
+  $$ = ast; 
+}
+| '[' Exp ']' ArrayExp {
+  auto ast = new ArrayExpAST();
+  ast->exp = unique_ptr<BaseAST>($2);
+  ast->arrayexp = unique_ptr<BaseAST>($4);
+  $$ = ast; 
+}
 ;
 
 Number

@@ -150,16 +150,17 @@ aaa
 
 
 ## Lv4 & Lv5
+### IR 生成
 这部分内容需要实现变量和常量的定义、赋值和使用，并且应当在适当的位置使用适当的变量/常量。
 
 需要在`EBNF`中添加对应的推导规则。此时遇到了`Bison`不能直接支持的形式——一个部分重复出现若干次。比如这个例子：
 
-> ConstDecl     ::= "const" BType ConstDef {"," ConstDef} ";"
+> ConstDecl     -> "const" BType ConstDef {"," ConstDef} ";"
 
 我的解决方案是把重复的部分看作一个对自己的递归调用的推导规则。比如此处相当于有若干个`ConstDef`的组合，所以把这个语句拆分成两句：
 
-> ConstDecl     ::= "const" BType ConstDef ";"
-> ConstDef      ::= B | B "," ConstDef
+> ConstDecl     -> "const" BType ConstDef ";"
+> ConstDef      -> B | B "," ConstDef
 
 这里`B`表示原先`ConstDef`的推导规则。也就是说，现在的可重复部分比原来多了一些规则，就是在推导出之前形式的后面再加上一个新的自己。
 
@@ -200,9 +201,82 @@ typedef struct
 static Symboltable symbt;
 ```
 
+为了方便访问栈中的元素，在具体的实现中改为使用`vector`。
+
+另一个需要改动的部分是对这些变量和常量的使用。这些值会以`LVal`的形式被引用。如果出现在表达式的右边，说明这个值需要被用于计算，统一的方法是在用到这些值的时候，把相应的值放到一个临时变量上。如果出现在左边，意味着要向这个变量存储数据——添加一个新的函数`assign`，用`store`命令把相应的临时变量的值写入到这个变量对应的地址位置。
+
+常量的定义是可以使用之前定义的常量的，所以在编译时就要完成这部分计算。对这些计算涉及到的`AST`添加一个函数`Calc`，直接返回相应表达式的结果。
+
+### RISC-V 生成
+
+## Lv6 & Lv7
+这部分要完成控制的转移。
+### IR 生成
+
+
+### RISC-V 生成
+
+
+
+## Lv8
+这部分的目的是处理函数和全局变量
+### IR 生成
+
+函数的引入意味着一个`CompUnit`将可以推导出多个函数，当然可能推导出一些全局变量和常量的定义。但是对`CompUnit`推导的修改好像不那么简单，所以我采取了一种“间接”的方式——先由`CompUnit`推导出一个固定的`AST`，再用这个`AST`作文章。然后又发现了新的问题——全局变量的声明和函数声明的前两个词是完全一样的，意味着在推导时会遇到“归约-归约冲突”。解决的方案是再用一个“间接”的方式——先推导出表示函数或者全局变量的`AST`，再细分到底是哪一种。具体的实现就是：
+
+> CompUnit     -> Units
+> Units        -> FunorVar | ConstDecl | CompUnits FunorVar | CompUnits ConstDecl
+> FunorVar     -> FuncType FuncDef | FuncType VarDef ';'
+
+这样的缺陷就是`Vardef`和`FuncDef`的类型声明部分被拆到原先的`AST`外面了。所以在输出函数进到`FunorVar`后调用`FuncDef`之前，需要把`FuncDef`内的类型声明补充好。
+
+函数定义较之前多处可选的参数部分。和Lv4中的处理方法一样，拆分非终结符号如下：
+
+> FuncDef     -> IDENT '(' ')' Block | IDENT '(' FuncFParams ')' Block
+> FuncFParams -> FuncFParam | FuncFParam ',' FuncFParams
+
+为了方便目标代码生成部分的处理，在进入被调用函数之后给所有的参数分配空间，并复制到栈上保存。在调用函数时，应当给出所有参数。由于之前已经在实现中把所有的数都保存为一个临时变量后返回对应临时变量的名称，此时只要遍历这个参数的递归定义然后把这些返回的字符串连在一起就是调用的参数。
+
+全局符号不能放在任何一个之前定义的符号表中，应当建立一个新的全局的符号表。这时，找一个符号可能在任何函数的符号表里都找不到，还要再次查找全局符号表来确定符号是否存在(当然在编译的评测中所有的符号都是良好定义的不用考虑没找到的情况)，找一个`ident`对应的条目的具体的实现为
+```c++
+std::map<std::string, Symbol>::iterator it;
+if (currentsymbt == NULL)
+{
+  it = symbt.globalsymbol.find(ident);
+}
+else
+{
+  for (int d = currentsymbt->depth; d >= 0; d--)
+  {
+    if ((it = currentsymbt->smap[d].find(ident)) != currentsymbt->smap[d].end())
+      break;
+  }
+  if (it == currentsymbt->smap[0].end())
+  {
+    it = symbt.globalsymbol.find(ident);
+  }
+}
+return it->second.value;
+```
+
+应当考虑当前处在全局没有函数符号表的情况，此时访问`currentsymbt`指针下的内容会导致段错误。
 
 
 
 
+### RISC-V 生成
 
 
+## Lv9
+这部分的内容是数组的相关运算。
+
+首先是数组的开辟以及初始化。声明的部分中，每个`ident`都可以作为数组，后面跟着若干的方括号。
+
+docker run -it --rm -v C:\Users\herby\Documents\compiler_v2:/root/compiler maxxing/compiler-dev bash
+
+
+然后是数组作为参数的传递以及解析。
+### IR 生成
+
+
+### RISC-V 生成
