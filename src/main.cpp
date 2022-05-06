@@ -50,18 +50,19 @@ int main(int argc, const char *argv[]) {
 
   if (strcmp(mode, "-koopa") == 0)
   {
-    // dump AST
+    // Dump Koopa IR
     freopen(output, "w", stdout);
     ast->Dump();
     dup2(old, 1);
   }
   else if (strcmp(mode, "-riscv") == 0)
   {
-    // dump AST
+    // Dump Koopa IR
     FILE *fp = freopen((string(output) + ".koopa").c_str(), "w", stdout);
     ast->Dump();
     fflush(fp);
     dup2(old, 1);
+    // Koopa IR -> RISC-V
     FILE* koopaio = fopen((string(output) + ".koopa").c_str(), "r");
     char *str=(char *)malloc(1 << 30);
     memset(str, 0, 1 << 30);
@@ -73,7 +74,7 @@ int main(int argc, const char *argv[]) {
     parse_string(str);
     dup2(old, 1);
   }
-  
+
   return 0;
 }
 
