@@ -528,12 +528,12 @@ MS
   ast->ms = unique_ptr<BaseAST>($5);
   $$ = ast; 
 }
-| BREAK {
+| BREAK ';' {
   auto ast = new MSAST();
   ast->type = 8;
   $$ = ast; 
 }
-| CONTINUE {
+| CONTINUE ';' {
   auto ast = new MSAST();
   ast->type = 9;
   $$ = ast; 
