@@ -243,7 +243,14 @@ public:
     block->Dump();
     if (currentsymbt->blockend == 0)
     {
-      std::cout << "  ret" << std::endl;
+      if (func_type == 1)
+      {
+        now++;
+        std::cout << "  %" << now << " = add 0, 0" << std::endl;
+        std::cout << "  ret %" << now << std::endl;
+      }
+      else
+        std::cout << "  ret" << std::endl;
       currentsymbt->blockend = 1;
     }
     std::cout << "}" << std::endl;
@@ -1173,7 +1180,6 @@ public:
         std::cout << "  jump %while_entry_" << currentsymbt->loopstack.top() << std::endl;
       }
     }
-
     std::string str;
     return str;
   }
