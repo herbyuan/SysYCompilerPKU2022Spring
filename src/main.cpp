@@ -68,8 +68,8 @@ int main(int argc, const char *argv[]) {
     memset(str, 0, 1 << 30);
     int len = fread(str, 1, 1 << 30, koopaio);
     str[len] = 0;
-    cout<<str<<endl;
-    parse_string(str);
+    // cout<<str<<endl;
+    // parse_string(str);
     freopen(output, "w", stdout);
     parse_string(str);
     dup2(old, 1);

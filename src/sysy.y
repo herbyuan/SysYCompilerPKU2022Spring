@@ -1559,10 +1559,10 @@ void parse_string(const char* str)
           }
           
           cout << "  bnez t0, " << value->kind.data.branch.true_bb->name+1 << endl;
-          cout << "  j     " << value->kind.data.branch.false_bb->name+1 << endl;
+          cout << "  jal  x0, " << value->kind.data.branch.false_bb->name+1 << endl;
         }
         else if (value->kind.tag == KOOPA_RVT_JUMP){
-          cout << "  j     " << value->kind.data.jump.target->name+1 << endl;
+          cout << "  jal  x0, " << value->kind.data.jump.target->name+1 << endl;
         }
         else if (value->kind.tag == KOOPA_RVT_CALL){
           int sbrk = 0;
