@@ -55,7 +55,7 @@ int main(int argc, const char *argv[]) {
     ast->Dump();
     dup2(old, 1);
   }
-  else if (strcmp(mode, "-riscv") == 0)
+  else
   {
     // Dump Koopa IR
     FILE *fp = freopen((string(output) + ".koopa").c_str(), "w", stdout);
