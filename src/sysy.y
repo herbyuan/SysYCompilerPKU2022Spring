@@ -889,6 +889,8 @@ void parse_string(const char* str)
   koopa_raw_program_t raw = koopa_build_raw_program(builder, program);
   // 释放 Koopa IR 程序占用的内存
   koopa_delete_program(program);
+  int local_label = 1;
+
 
   // 处理 raw program
   for (size_t i = 0; i < raw.values.len; ++i)
@@ -1558,10 +1560,13 @@ void parse_string(const char* str)
             cout << "  lw    t0, 0(t0)" << endl;
           }
           
-          cout << "  bnez t0, " << value->kind.data.branch.true_bb->name+1 << endl;
-          cout << "  jal  x0, " << value->kind.data.branch.false_bb->name+1 << endl;
+          //cout << "  bnez t0, " << value->kind.data.branch.true_bb->name+1 << endl;
+          cout << "  beq   t0, x0, " << local_label << "f" << endl;
+          cout << "  jal   x0, " << value->kind.data.branch.true_bb->name+1 << endl;
+          cout << local_label++ << ":  jal   x0, " << value->kind.data.branch.false_bb->name+1 << endl;
         }
         else if (value->kind.tag == KOOPA_RVT_JUMP){
+          // AUIPC和JALR配合可以跳转32位相对于PC的地址范围
           cout << "  jal  x0, " << value->kind.data.jump.target->name+1 << endl;
         }
         else if (value->kind.tag == KOOPA_RVT_CALL){
@@ -1604,7 +1609,10 @@ void parse_string(const char* str)
               cout<< "  sw    t0, " << 4 * (para-8) << "(sp)" << endl; 
             }
           }
-          cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
+          cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
+          cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
+
+          // cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
           if (sbrk){
             cout<< "  addi  sp, sp, " << sbrk << endl;
           }
@@ -1621,7 +1629,6 @@ void parse_string(const char* str)
           
           map[value] = allc;
           allc += 4;
-
         }
         else if (value->kind.tag == KOOPA_RVT_RETURN){
           // 示例程序中, 你得到的 value 一定是一条 return 指令
@@ -1667,8 +1674,7 @@ void parse_string(const char* str)
             cout << "  lw    ra, " << -4 << "(t1)" << endl;
             cout << "  lw    s0, " << -8 << "(t1)" << endl;
             cout << "  add  sp, sp, t0" << endl;
-          }
-          
+          }          
           cout << "  ret" << endl;
         }
       }
