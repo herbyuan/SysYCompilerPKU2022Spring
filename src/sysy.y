@@ -866,8 +866,790 @@ void parse_string(const char* str)
   // 释放 Koopa IR 程序占用的内存
   koopa_delete_program(program);
 
+  // 处理 raw program
+  for (size_t i = 0; i < raw.values.len; ++i)
+  {
+    koopa_raw_value_t value = (koopa_raw_value_t) raw.values.buffer[i];
+    cout << "  .data" << endl;
+    cout << "  .globl " << value->name+1 << endl;
+    cout<<value->name+1<<":"<<endl;
+    
+    if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+    {
+      //cout << value->kind.data.global_alloc.init->kind.tag<<endl;
+      if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_AGGREGATE)
+      {
+        global_alloc(value->kind.data.global_alloc.init);
+      }
+      if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT)
+      {
+        
+        cout << "  .zero " << calc_alloc_size(value->kind.data.global_alloc.init->ty)<< endl;
+      }
+      if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_INTEGER)
+      {
+        cout<<"  .word "<<value->kind.data.global_alloc.init->kind.data.integer.value<<endl;
+      }
+    }
+    else
+    {
+      cout<<"ERROR"<<endl;
+    }
+    cout<<endl;
+  }
+
+  // 使用 for 循环遍历函数列表
+  for (size_t i = 0; i < raw.funcs.len; ++i) {
+    // 正常情况下, 列表中的元素就是函数, 我们只不过是在确认这个事实
+    // 当然, 你也可以基于 raw slice 的 kind, 实现一个通用的处理函数
+    assert(raw.funcs.kind == KOOPA_RSIK_FUNCTION);
+    // 获取当前函数
+    koopa_raw_function_t func = (koopa_raw_function_t) raw.funcs.buffer[i];
+    // 进一步处理当前函数
+
+    if (func->bbs.len == 0)
+      continue;
+    cout << endl << "  .text"<< endl;
+    cout << "  .globl " << func->name+1 << endl; // name的第一个字符是@符号
+    cout << func->name+1 << ":" << endl;
+
+    int size = 0;  // stack size
+    for (size_t j = 0; j < func->bbs.len; ++j) {
+      koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[j];
+      // 进一步处理当前基本块
+      for (size_t k = 0; k < bb->insts.len; ++k){
+        koopa_raw_value_t value = (koopa_raw_value_t)bb->insts.buffer[k];
+
+        if (value->kind.tag == KOOPA_RVT_ALLOC){
+          if (value->ty->tag == KOOPA_RTT_POINTER)
+          {
+            if (value->ty->data.pointer.base->tag == KOOPA_RTT_INT32)
+            {
+              size += 4;
+            }
+            else if (value->ty->data.pointer.base->tag == KOOPA_RTT_ARRAY)
+            {
+              int sz = calc_alloc_size(value->ty->data.pointer.base);
+              size += sz;
+            }
+            else if (value->ty->data.pointer.base->tag == KOOPA_RTT_POINTER)
+            {
+              size += 4;
+            }
+          }    
+        }
+        else if (value->kind.tag == KOOPA_RVT_LOAD){
+            size += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_STORE){
+        }
+        else if (value->kind.tag == KOOPA_RVT_GET_PTR) {
+          size += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_GET_ELEM_PTR) {
+          size += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_BINARY){
+          size += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_BRANCH){
+        }
+        else if (value->kind.tag == KOOPA_RVT_JUMP){
+        }
+        else if (value->kind.tag == KOOPA_RVT_CALL){
+          size += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_RETURN){
+        }
+      }
+    }
+
+    size = (size + 31) >> 4 << 4;
+    if (size >= -2048 && size <=2047)
+    {
+      cout << "  addi  sp, sp, -" << size <<endl;
+      cout << "  sw    ra, " << size - 4 << "(sp)" << endl;
+      cout << "  sw    s0, " << size - 8 << "(sp)" << endl;
+    }
+    else
+    {
+      cout << "  li    t0, " << size << endl;
+      cout << "  sub   sp, sp, t0" << endl;
+      cout << "  add   t1, sp, t0" << endl;
+      cout << "  sw    ra, " << -4 << "(t1)" << endl;
+      cout << "  sw    s0, " << -8 << "(t1)" << endl;
+    }
+    
+    int allc = 0;
+
+    for (size_t j = 0; j < func->bbs.len; ++j) {
+      //cout<<"j = "<<j<<endl;
+      assert(func->bbs.kind == KOOPA_RSIK_BASIC_BLOCK);
+      koopa_raw_basic_block_t bb = (koopa_raw_basic_block_t)func->bbs.buffer[j];
+      // 进一步处理当前基本块
+      // ...
+      cout << bb->name+1 << ":" << endl;
+      for (size_t k = 0; k < bb->insts.len; ++k){
+        //cout<<" k = "<<k<<endl;
+        //cout<<"len = "<<bb->insts.len<<endl;
+        int current = 0;
+        koopa_raw_value_t value = (koopa_raw_value_t)bb->insts.buffer[k];
+        
+        //cout<<(value->kind.tag)<<endl;
+
+        if (value->kind.tag == KOOPA_RVT_ALLOC){
+          // cout<<"tag = "<<value->ty->tag<<endl;
+          if (value->ty->tag == KOOPA_RTT_POINTER)
+          {
+            if (value->ty->data.pointer.base->tag == KOOPA_RTT_INT32)
+            {
+              map[value] = allc;
+              allc = allc + 4;
+            }
+            else if (value->ty->data.pointer.base->tag == KOOPA_RTT_ARRAY)
+            {
+              int sz = calc_alloc_size(value->ty->data.pointer.base);
+              map[value] = allc;
+              allc += sz;
+            }
+            else if (value->ty->data.pointer.base->tag == KOOPA_RTT_POINTER)
+            {
+              map[value] = allc;
+              allc = allc + 4;
+            }
+          }     
+          // cout<<"AFTER ALLC: " << allc<<endl;
+        }
+        else if (value->kind.tag == KOOPA_RVT_LOAD){
+          if (value->kind.data.load.src->kind.tag == KOOPA_RVT_GLOBAL_ALLOC){
+            cout << "  la    t0, " << value->kind.data.load.src->name+1 << endl;
+            cout << "  lw    t0, 0(t0)" << endl;
+            if (allc >= -2048 && allc <=2047)
+            {
+              cout << "  sw    t0, " << allc << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << allc << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  sw    t0, 0(t1)" << endl;
+            }
+            
+            map[value] = allc;
+            allc = allc + 4;
+          }
+          else if (value->kind.data.load.src->kind.tag == KOOPA_RVT_ALLOC)
+          {
+            if (map[value->kind.data.load.src] >= -2048 && map[value->kind.data.load.src] <=2047)
+            {
+              cout << "  lw    t0, " << map[value->kind.data.load.src] << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << map[value->kind.data.load.src] << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  lw    t0, 0(t1)" << endl;
+            }
+            
+            if (allc >= -2048 && allc <=2047)
+            {
+              cout << "  sw    t0, " << allc << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << allc << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  sw    t0, 0(t1)" << endl;
+            }
+            map[value] = allc;
+            allc = allc + 4;
+          }
+          else{
+            if (map[value->kind.data.load.src] >= -2048 && map[value->kind.data.load.src] <=2047)
+            {
+              cout << "  lw    t0, " << map[value->kind.data.load.src] << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << map[value->kind.data.load.src] << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  lw    t0, 0(t1)" << endl;
+            }
+
+            cout << "  lw    t0, 0(t0)" << endl;
+            
+            if (allc >= -2048 && allc <=2047)
+            {
+              cout << "  sw    t0, " << allc << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << allc << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  sw    t0, 0(t1)" << endl;
+            }
+
+            map[value] = allc;
+            allc = allc + 4;
+          }
+        }
+        else if (value->kind.tag == KOOPA_RVT_STORE){
+
+          // cout<<value->kind.data.store.value->kind.tag<<endl;
+          if(value->kind.data.store.value->kind.tag == KOOPA_RVT_INTEGER){
+            // cout<<value->kind.data.store.dest->kind.tag<<endl;
+            if (value->kind.data.store.dest->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+            {
+              cout << "  la    t0, " << value->kind.data.store.dest->name+1 << endl;
+              cout << "  li    t1, " << value->kind.data.store.value->kind.data.integer.value << endl;
+              cout << "  sw    t1, 0(t0)" << endl;
+            }
+            else if (value->kind.data.store.dest->kind.tag == KOOPA_RVT_ALLOC)
+            {
+              cout << "  li    t0, " << value->kind.data.store.value->kind.data.integer.value << endl;
+
+              if (map[value->kind.data.store.dest] >= -2048 && map[value->kind.data.store.dest] <= 2047)
+              {
+                cout << "  sw    t0, " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.dest]<<endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  sw    t0, 0(t1)" << endl;
+              }              
+            }
+            else
+            {
+              cout << "  li    t0, " << value->kind.data.store.value->kind.data.integer.value << endl;
+
+              if (map[value->kind.data.store.dest] >= -2048 && map[value->kind.data.store.dest] <= 2047)
+              {
+                cout << "  lw    t1, " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.dest]<<endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  lw    t1, 0(t1)" << endl;
+              }  
+              cout << "  sw    t0, 0(t1)" << endl;              
+            }
+            
+          }
+          else if (value->kind.data.store.value->kind.tag == KOOPA_RVT_FUNC_ARG_REF) 
+          {
+            int id = value->kind.data.store.value->kind.data.block_arg_ref.index;
+            if (id < 8)
+            {
+              if (map[value->kind.data.store.dest] >=-2048 && map[value->kind.data.store.dest] <=2047)
+              {
+                cout << "  sw    a" << id << ", " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.dest] <<endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  sw    a" << id << ", 0(t1)" << endl;
+              }
+              
+            }
+            else
+            {
+              if (size + 4 * (id - 8) >= -2048 && size + 4 * (id - 8) <= 2047)
+              {
+                cout << "  lw    t0, " << size + 4 * (id - 8) << "(sp)"<< endl;
+              }
+              else
+              {
+                cout << "  li    t0, " << size + 4 * (id - 8);
+                cout << "  add   t0, t0, sp" << endl;
+                cout << "  lw    t0, 0(t0)" << endl;
+              }
+
+              if (map[value->kind.data.store.dest] >= -2048 && map[value->kind.data.store.dest] <= 2047)
+              {
+                cout << "  sw    t0, " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li   t1, " << map[value->kind.data.store.dest];
+                cout << "  add  t1, t1, sp" << endl;
+                cout << "  sw   t0, 0(t1)" <<endl;
+              }              
+            }
+          }
+          else
+          {
+            if (value->kind.data.store.dest->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+            {
+              cout << "  la    t0, " << value->kind.data.store.dest->name+1 << endl;
+              if (map[value->kind.data.store.value] >= -2048 && map[value->kind.data.store.value] <= 2047)
+              {
+                cout << "  lw    t1, " << map[value->kind.data.store.value] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.value] << endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  lw    t1, 0(t1)" << endl;
+              }
+              cout << "  sw    t1, 0(t0)" << endl;
+            }
+            else if (value->kind.data.store.dest->kind.tag == KOOPA_RVT_ALLOC)
+            {
+              if (map[value->kind.data.store.value] >= -2048 && map[value->kind.data.store.value] <= 2047)
+              {
+                cout << "  lw    t1, " << map[value->kind.data.store.value] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.value] << endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  lw    t1, 0(t1)" << endl;
+              }
+              if (map[value->kind.data.store.dest] >= -2048 && map[value->kind.data.store.dest] <=2047)
+              {
+                cout << "  sw    t1, " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t0, " << map[value->kind.data.store.dest] << endl;
+                cout << "  add   t0, t0, sp" << endl;
+                cout << "  sw    t1, 0(t0)" << endl;
+              }
+            }
+            else
+            {
+              if (map[value->kind.data.store.value] >= -2048 && map[value->kind.data.store.value] <= 2047)
+              {
+                cout << "  lw    t0, " << map[value->kind.data.store.value] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t0, " << map[value->kind.data.store.value] << endl;
+                cout << "  add   t0, t0, sp" << endl;
+                cout << "  lw    t0, 0(t0)" << endl;
+              }
+              if (map[value->kind.data.store.dest] >= -2048 && map[value->kind.data.store.dest] <=2047)
+              {
+                cout << "  lw    t1, " << map[value->kind.data.store.dest] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t1, " << map[value->kind.data.store.dest] <<endl;
+                cout << "  add   t1, t1, sp" << endl;
+                cout << "  lw    t1, 0(t1)" << endl;
+              }
+              cout << "  sw    t0, 0(t1)" << endl;              
+            }
+          }
+        }
+        else if (value->kind.tag == KOOPA_RVT_GET_PTR) {
+
+          koopa_raw_value_t src = value->kind.data.get_ptr.src;
+          koopa_raw_value_t index = value->kind.data.get_ptr.index;
 
 
+          int sz;
+
+          // cout<< "tag = " << src->kind.tag<<endl;
+
+
+          if (src->kind.tag == KOOPA_RVT_ALLOC)
+          {
+            if (map[src] <= 2047 && map[src] >= -2048)
+              cout << "  addi  t0, sp, " << map[src] << endl;
+            else
+            {
+              cout << "  li    t1, " << map[src] << endl;
+              cout << "  add   t0, sp, t1" << endl;
+            }
+            sz = calc_alloc_size(src->ty->data.pointer.base->data.array.base);
+          }
+          else if(src->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+          {
+            cout << "  la    t0, " << src->name+1 << endl;
+            sz = calc_alloc_size(src->ty->data.pointer.base->data.array.base);
+          }
+          else if (src->kind.tag == KOOPA_RVT_LOAD)
+          {
+            if (map[src] <= 2047 && map[src] >= -2048)
+              cout << "  addi  t0, sp, " << map[src] << endl;
+            else
+            {
+              cout << "  li    t1, " << map[src] << endl;
+              cout << "  add   t0, sp, t1" << endl;
+            }
+              cout << "  lw    t0, 0(t0)" << endl;
+            sz = calc_alloc_size(src->kind.data.load.src->ty->data.pointer.base->data.pointer.base);
+          }
+          else
+          {
+            if (map[src] <= 2047 && map[src] >= -2048)
+              cout << "  addi  t0, sp, " << map[src] << endl;
+            else
+            {
+              cout << "  li    t1, " << map[src] << endl;
+              cout << "  add   t0, sp, t1" << endl;
+            }
+              cout << "  lw    t0, 0(t0)" << endl;
+            sz = calc_alloc_size(src->ty->data.pointer.base->data.array.base);
+
+          }
+          if (index->kind.tag == KOOPA_RVT_INTEGER)
+          {
+            int offset = index->kind.data.integer.value;
+            cout << "  li    t1, " << offset << endl;
+          }
+          else
+          {
+            if (map[index] >= -2048 && map[index] <= 2047)
+            {
+              cout << "  lw    t1, " << map[index] << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << map[index] << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  lw    t1, 0(t1)" << endl;
+            }
+          }
+          cout << "  li    t2, " << sz << endl;
+          cout << "  mul   t1, t1, t2" << endl;
+          cout << "  add   t0, t0, t1" << endl;
+          
+          if (allc >= -2048 && allc <=2047)
+          {
+            cout << "  sw    t0, " << allc << "(sp)" << endl;
+          }
+          else
+          {
+            cout << "  li    t1, " << allc <<endl;
+            cout << "  add   t1,t1,sp"<<endl;
+            cout << "  sw    t0, 0(t1)" << endl;
+          }
+          
+          map[value] = allc;
+          allc += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_GET_ELEM_PTR) {
+          koopa_raw_value_t src = value->kind.data.get_elem_ptr.src;
+          koopa_raw_value_t index = value->kind.data.get_elem_ptr.index;
+          int sz = calc_alloc_size(src->ty->data.pointer.base->data.array.base);
+          // cout<< "tag = " << index->kind.tag<<endl;
+          if (src->kind.tag == KOOPA_RVT_ALLOC)
+          {
+            if (map[src] <= 2047 && map[src] >= -2048)
+              cout<< "  addi   t0, sp, " << map[src] << endl;
+            else
+            {
+              cout << "  li    t1, " << map[src] << endl;
+              cout << "  add   t0, sp, t1" << endl;
+            }
+          }
+          else if(src->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
+          {
+            cout << "  la    t0, " << src->name+1 << endl;
+          }
+          else
+          {
+            if (map[src] <= 2047 && map[src] >= -2048)
+              cout << "  addi  t0, sp, " << map[src] << endl;
+            else
+            {
+              cout << "  li    t1, " << map[src] << endl;
+              cout << "  add   t0, sp, t1" << endl;
+            }
+              cout << "  lw  t0, 0(t0)" << endl;
+            
+          }
+          if (index->kind.tag == KOOPA_RVT_INTEGER)
+          {
+            int offset = index->kind.data.integer.value;
+            cout << "  li   t1, " << offset << endl;
+          }
+          else
+          {
+            if (map[index] >= -2048 && map[index] <= 2047)
+            {
+              cout << "  lw    t1, " << map[index] << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t1, " << map[index] << endl;
+              cout << "  add   t1, t1, sp" << endl;
+              cout << "  lw    t1, 0(t1)" << endl;
+            }
+          }
+          
+          cout << "  li    t2, " << sz << endl;
+          cout << "  mul   t1, t1, t2" << endl;
+          cout << "  add   t0, t0, t1" << endl;
+          
+          if (allc >= -2048 && allc <= 2047)
+          {
+            cout << "  sw    t0, " << allc << "(sp)" << endl;
+          }
+          else
+          {
+            cout << "  li    t1, " << allc <<endl;
+            cout << "  add   t1,t1,sp"<<endl;
+            cout << "  sw    t0, 0(t1)" << endl;
+          }
+
+          map[value] = allc;
+          allc += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_BINARY){
+          string rs1,rs2,rd;
+          if(value->kind.data.binary.lhs->kind.tag == KOOPA_RVT_INTEGER){
+            int lvalue = value->kind.data.binary.lhs->kind.data.integer.value;
+            if (lvalue == 0){
+              rs1 = "x0";
+            }
+            else
+            {
+              cout << "  li    " << "t" << current << ", " << lvalue << endl;
+              rs1 = string("t") + to_string(current);
+              current = current + 1;
+            }
+          }
+          else {
+            if (map[value->kind.data.binary.lhs] >= -2048 && map[value->kind.data.binary.lhs] <= 2047)
+            {
+              cout << "  lw    t" << current << ", " << map[value->kind.data.binary.lhs] <<"(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t" << current << ", " << map[value->kind.data.binary.lhs] << endl;
+              cout << "  add   t" << current << ", t" << current << ", sp" << endl;
+              cout << "  lw    t" << current << ", 0(t" << current << ")" << endl; 
+            }
+            
+            rs1 = string("t") + to_string(current);
+            current = current + 1;
+          }
+          // cout<< "op = "<< value->kind.data.binary.op <<' '<<endl;
+          if(value->kind.data.binary.rhs->kind.tag == KOOPA_RVT_INTEGER){
+            int rvalue = value->kind.data.binary.rhs->kind.data.integer.value;
+            if (rvalue == 0){
+              rs2 = "x0";
+            }
+            else{
+              cout << "  li    " << "t" << current << ", " << rvalue << endl;
+              rs2 = string("t") + to_string(current);
+              current = current + 1;
+            }
+          }
+          else {
+            if (map[value->kind.data.binary.rhs] >= -2048 && map[value->kind.data.binary.rhs] <= 2047)
+            {
+              cout << "  lw    t" << current << ", " << map[value->kind.data.binary.rhs] <<"(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t" << current << ", " << map[value->kind.data.binary.rhs] << endl;
+              cout << "  add   t" << current << ", t" << current << ", sp" << endl;
+              cout << "  lw    t" << current << ", 0(t" << current << ")" << endl; 
+            }
+            rs2 = string("t") + to_string(current);
+            current = current + 1;
+          }    
+        
+          rd = string("t") + to_string(current);
+          current = current + 1;
+          // map[value] = rd;
+          if (value->kind.data.binary.op == 0){
+            // ne          
+            cout<<"  xor   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+            cout<<"  seqz  "<< rd<<", "<<rd<<endl;
+            cout << "  li    " << rs1 << ", " << 1 << endl;
+            cout<<"  sub   "<< rd<<", "<<rs1<<", "<< rd<<endl;
+          }
+          else if (value->kind.data.binary.op == 1){
+            // eq          
+            cout<<"  xor   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+            cout<<"  seqz  "<< rd<<", "<<rd<<endl;
+          }
+          else if (value->kind.data.binary.op == 2){  // greater than
+            cout<<"  sgt   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 3){  // less than
+            cout<<"  slt   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 4){  // greater or equal than
+            cout<<"  slt   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+            cout<<"  seqz  "<< rd<<", "<<rd<<endl;
+          }
+          else if (value->kind.data.binary.op == 5){  // less or equal than
+            cout<<"  sgt   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+            cout<<"  seqz  "<< rd<<", "<<rd<<endl;
+          }
+          else if (value->kind.data.binary.op == 6){
+            cout<<"  add   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 7){
+            cout<<"  sub   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 8){
+            cout<<"  mul   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 9){
+            cout<<"  div   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 10){
+            cout<<"  rem   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 11){
+            cout<<"  and   "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+          else if (value->kind.data.binary.op == 12){
+            cout<<"  or    "<< rd<<", "<<rs1<<", "<<rs2<<endl;
+          }
+
+          if (allc >= -2048 && allc <= 2047)
+          {
+            cout << "  sw    " << rd <<", " << allc << "(sp)" << endl;
+          }
+          else
+          {
+            cout << "  li    t" << current << ", " << allc << endl;
+            cout << "  add   t" << current << ", t" << current << ", sp" << endl;
+            cout << "  sw    " << rd << ", 0(t" << current << ")" << endl;
+          }
+          map[value] = allc;
+          //cout<<long(value)<<endl;
+          allc += 4;
+        }
+        else if (value->kind.tag == KOOPA_RVT_BRANCH){
+          if (map[value->kind.data.branch.cond] >= -2048 && map[value->kind.data.branch.cond] <=2047)
+          {
+            cout << "  lw    t0, " << map[value->kind.data.branch.cond] << "(sp)" << endl;
+          }
+          else
+          {
+            cout << "  li    t0, " << map[value->kind.data.branch.cond] << endl;
+            cout << "  add   t0, t0, sp" << endl;
+            cout << "  lw    t0, 0(t0)" << endl;
+          }
+          
+          cout << "  bnez t0, " << value->kind.data.branch.true_bb->name+1 << endl;
+          cout << "  j     " << value->kind.data.branch.false_bb->name+1 << endl;
+        }
+        else if (value->kind.tag == KOOPA_RVT_JUMP){
+          cout << "  j     " << value->kind.data.jump.target->name+1 << endl;
+        }
+        else if (value->kind.tag == KOOPA_RVT_CALL){
+          int sbrk = 0;
+          int p1 = value->kind.data.call.args.len > 8 ? 8:value->kind.data.call.args.len;
+          for (int para = 0; para < p1; ++para)
+          {
+            if (map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] >= -2048 && map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] <=2047)
+            {
+              cout<< "  lw   a" << para << ", " << map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] << "(sp)" << endl;
+            }
+            else
+            {
+              cout << "  li    t0," << map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] << endl;
+              cout << "  add   t0, t0, sp" << endl;
+              cout << "  lw    a" << para << ", 0(t0)" << endl; 
+            }
+            
+          }
+          if (value->kind.data.call.args.len > 8)
+          {
+            sbrk = 4 * (value->kind.data.call.args.len - 8);
+            cout<< "  addi  sp, sp, -" << sbrk << endl; 
+          }
+          if (sbrk)
+          {
+            for (int para = 8; para < value->kind.data.call.args.len; ++para)
+            {
+              if (map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] >= -2048 && map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] <=2047)
+              {
+                cout<< "  lw    t0, " << map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] + sbrk << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t0," << map[(koopa_raw_value_t)value->kind.data.call.args.buffer[para]] << endl;
+                cout << "  add   t0, t0, sp" << endl;
+                cout << "  lw    t0, " << sbrk << "(t0)" << endl; 
+              }
+
+              cout<< "  sw    t0, " << 4 * (para-8) << "(sp)" << endl; 
+            }
+          }
+          cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
+          if (sbrk){
+            cout<< "  addi  sp, sp, " << sbrk << endl;
+          }
+          if (allc >=-2048 && allc <= 2047)
+          {
+            cout<< "  sw    a0, " << allc << "(sp)" << endl;
+          }
+          else
+          {
+            cout << "  li    t0, " << allc <<endl;
+            cout << "  add  t0, t0, sp" << endl;
+            cout << "  sw    a0, 0(t0)" << endl;
+          }
+          
+          map[value] = allc;
+          allc += 4;
+
+        }
+        else if (value->kind.tag == KOOPA_RVT_RETURN){
+          // 示例程序中, 你得到的 value 一定是一条 return 指令
+          // 于是我们可以按照处理 return 指令的方式处理这个 value
+          // return 指令中, value 代表返回值
+          //cout<<"ret"<<endl;
+          koopa_raw_value_t ret_value = value->kind.data.ret.value;
+          //cout<<"ret"<<endl;
+          if (ret_value != NULL){
+            if (ret_value->kind.tag == KOOPA_RVT_INTEGER){
+              // 于是我们可以按照处理 integer 的方式处理 ret_value
+              // integer 中, value 代表整数的数值
+              int32_t int_val = ret_value->kind.data.integer.value;
+              // 示例程序中, 这个数值一定是 0
+              // assert(int_val == 0);
+              cout << "   li    " << "a0 , " << int_val << endl;
+            }
+            else {
+              //cout<<"  mv    a0, "<<map[ret_value]<<endl;
+              if (map[ret_value] >= -2048 && map[ret_value] <=2047)
+              {
+                cout << "  lw    a0, "<< map[ret_value] << "(sp)" << endl;
+              }
+              else
+              {
+                cout << "  li    t0, " << map[ret_value] << endl;
+                cout << "  add   t0, t0, sp" << endl;
+                cout << "  lw    a0, 0(t0)" << endl;
+              }
+            }
+          }
+          
+          if (size >= -2048 && size <= 2047)
+          {
+            cout << "  lw    ra, " << size - 4 << "(sp)" << endl;
+            cout << "  lw    s0, " << size - 8 << "(sp)" << endl;
+            cout << "  addi  sp, sp, " << size <<endl;
+          }
+          else
+          {
+            cout << "  li    t0, " << size << endl;
+            cout << "  add   t1, t0, sp" << endl;
+            cout << "  lw    ra, " << -4 << "(t1)" << endl;
+            cout << "  lw    s0, " << -8 << "(t1)" << endl;
+            cout << "  add  sp, sp, t0" << endl;
+          }
+          
+          cout << "  ret" << endl;
+        }
+      }
+    }
+  }
 
   // 处理完成, 释放 raw program builder 占用的内存
   // 注意, raw program 中所有的指针指向的内存均为 raw program builder 的内存
