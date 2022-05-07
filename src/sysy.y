@@ -852,6 +852,30 @@ void yyerror(std::unique_ptr<BaseAST> &ast, const char *s) {
     fprintf(stderr, "ERROR: %s at symbol '%s' on line %d\n", s, buf, yylineno);
 }
 
+void global_alloc(koopa_raw_value_t value)
+{
+  for (int i = 0; i < value->kind.data.aggregate.elems.len; ++i)
+  {
+    koopa_raw_value_t t = (koopa_raw_value_t)value->kind.data.aggregate.elems.buffer[i];
+    if (t->kind.tag == KOOPA_RVT_INTEGER)
+    {
+      cout << "  .word " << t->kind.data.integer.value << endl;
+    }
+    else
+    {
+      global_alloc(t);
+    }
+  }
+}
+
+int calc_alloc_size(koopa_raw_type_t value)
+{
+  if (value->tag == 0)
+    return 4;
+  else
+    return value->data.array.len * calc_alloc_size(value->data.array.base);
+}
+
 void parse_string(const char* str)
 {
   map<koopa_raw_value_t, int> map;
