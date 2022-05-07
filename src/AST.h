@@ -1069,11 +1069,11 @@ public:
     if (debug) std::cout << "MSAST" << std::endl;
     if (type == 0)    //  ';'   do nothing
     {
-      if (currentsymbt->blockend == 0)
-      {
-        std::cout << "  %" << now + 1 << " = add 0, 0" << std::endl;
-        now++;
-      }
+      // if (currentsymbt->blockend == 0)
+      // {
+      //   std::cout << "  %" << now + 1 << " = add 0, 0" << std::endl;
+      //   now++;
+      // }
     }
     if (type == 1)     // Exp ';'
     {
