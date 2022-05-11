@@ -304,7 +304,7 @@ ConstDef
   ;
 
 ArrayDef
-: '[' ConstExp ']'{
+: '[' ConstExp ']' {
   auto ast = new ArrayDefAST();
   ast->constexp = unique_ptr<BaseAST>($2);
   $$ = ast;
@@ -902,24 +902,18 @@ void parse_string(const char* str)
     
     if (value->kind.tag == KOOPA_RVT_GLOBAL_ALLOC)
     {
-      //cout << value->kind.data.global_alloc.init->kind.tag<<endl;
       if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_AGGREGATE)
       {
         global_alloc(value->kind.data.global_alloc.init);
       }
       if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_ZERO_INIT)
-      {
-        
+      {        
         cout << "  .zero " << calc_alloc_size(value->kind.data.global_alloc.init->ty)<< endl;
       }
       if (value->kind.data.global_alloc.init->kind.tag == KOOPA_RVT_INTEGER)
       {
         cout<<"  .word "<<value->kind.data.global_alloc.init->kind.data.integer.value<<endl;
       }
-    }
-    else
-    {
-      cout<<"ERROR"<<endl;
     }
     cout<<endl;
   }
@@ -1059,8 +1053,7 @@ void parse_string(const char* str)
               cout << "  li    t1, " << allc << endl;
               cout << "  add   t1, t1, sp" << endl;
               cout << "  sw    t0, 0(t1)" << endl;
-            }
-            
+            }            
             map[value] = allc;
             allc = allc + 4;
           }
@@ -1272,16 +1265,9 @@ void parse_string(const char* str)
           }
         }
         else if (value->kind.tag == KOOPA_RVT_GET_PTR) {
-
           koopa_raw_value_t src = value->kind.data.get_ptr.src;
           koopa_raw_value_t index = value->kind.data.get_ptr.index;
-
-
           int sz;
-
-          // cout<< "tag = " << src->kind.tag<<endl;
-
-
           if (src->kind.tag == KOOPA_RVT_ALLOC)
           {
             if (map[src] <= 2047 && map[src] >= -2048)
@@ -1611,8 +1597,6 @@ void parse_string(const char* str)
           }
           cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
           cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
-
-          // cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
           if (sbrk){
             cout<< "  addi  sp, sp, " << sbrk << endl;
           }
@@ -1625,8 +1609,7 @@ void parse_string(const char* str)
             cout << "  li    t0, " << allc <<endl;
             cout << "  add  t0, t0, sp" << endl;
             cout << "  sw    a0, 0(t0)" << endl;
-          }
-          
+          }          
           map[value] = allc;
           allc += 4;
         }
