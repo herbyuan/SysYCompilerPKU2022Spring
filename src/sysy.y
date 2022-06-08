@@ -1595,8 +1595,11 @@ void parse_string(const char* str)
               cout<< "  sw    t0, " << 4 * (para-8) << "(sp)" << endl; 
             }
           }
-          cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
-          cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
+
+
+          cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
+          // cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
+          // cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
           if (sbrk){
             cout<< "  addi  sp, sp, " << sbrk << endl;
           }
