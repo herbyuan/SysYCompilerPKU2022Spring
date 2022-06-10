@@ -1546,14 +1546,18 @@ void parse_string(const char* str)
             cout << "  lw    t0, 0(t0)" << endl;
           }
           
-          //cout << "  bnez t0, " << value->kind.data.branch.true_bb->name+1 << endl;
+          //cout << "  bne  t0, x0, " << value->kind.data.branch.true_bb->name+1 << endl;
+          //cout << local_label++ << ":  jal   x0, " << value->kind.data.branch.false_bb->name+1 << endl;
           cout << "  beq   t0, x0, " << local_label << "f" << endl;
           cout << "  jal   x0, " << value->kind.data.branch.true_bb->name+1 << endl;
           cout << local_label++ << ":  jal   x0, " << value->kind.data.branch.false_bb->name+1 << endl;
         }
         else if (value->kind.tag == KOOPA_RVT_JUMP){
           // AUIPC和JALR配合可以跳转32位相对于PC的地址范围
-          cout << "  jal  x0, " << value->kind.data.jump.target->name+1 << endl;
+          //cout << "  jal  x0, " << value->kind.data.jump.target->name+1 << endl;
+          cout << local_label << ":  auipc t1, %pcrel_hi(" << value->kind.data.jump.target->name+1 << ")" << endl;
+          cout << "  jalr  x0, %pcrel_lo(" << local_label++ << "b) (t1)" << endl;
+
         }
         else if (value->kind.tag == KOOPA_RVT_CALL){
           int sbrk = 0;
@@ -1595,11 +1599,9 @@ void parse_string(const char* str)
               cout<< "  sw    t0, " << 4 * (para-8) << "(sp)" << endl; 
             }
           }
-
-
           cout << "  call  " << value->kind.data.call.callee->name+1 << endl;
-          // cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
-          // cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
+          //cout << local_label << ":  auipc ra, %pcrel_hi(" << value->kind.data.call.callee->name+1 << ")" << endl;
+          //cout << "  jalr  ra, %pcrel_lo(" << local_label++ << "b) (ra)" << endl;
           if (sbrk){
             cout<< "  addi  sp, sp, " << sbrk << endl;
           }
